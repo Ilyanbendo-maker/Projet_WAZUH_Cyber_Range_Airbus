@@ -1,0 +1,48 @@
+{
+  "name": "SOC tool - soar_status",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d6c16b65-cefa-4c75-b15c-6ac1943b4312",
+      "name": "Input"
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs=require('fs');\nconst out=(o)=>[{json:o}];\nconst inp=$('Input').first().json||{};\nfunction fromStr(s){s=String(s).trim();if(s.startsWith('{')){try{return JSON.parse(s);}catch(e){}}return {what:s};}\nlet raw=(inp.query!==undefined)?inp.query:inp; let a={};\nif(typeof raw==='string'){a=fromStr(raw);}\nelse if(raw&&typeof raw==='object'){ if(raw.what!==undefined||raw.resource!==undefined){a=raw;} else {const f=Object.values(raw)[0]; a=(typeof f==='string')?fromStr(f):(f&&typeof f==='object'?f:raw);} }\nlet what=String(a.what||a.resource||'both').toLowerCase().trim();\nif(!['bans','validations','both'].includes(what)) what='both';\nfunction readLines(p){ try{return String(fs.readFileSync(p,'utf8')).split('\\n').filter(Boolean).map(l=>{try{return JSON.parse(l)}catch(e){return null}}).filter(Boolean);}catch(e){return [];} }\nconst res={};\nif(what==='bans'||what==='both'){\n  const ev=readLines('/home/node/.n8n/soar_bans.jsonl'); const map={};\n  for(const e of ev){\n    if(e.type==='ban'){ map[e.ip+'@'+(e.agent||'')]={ip:e.ip,agent:e.agent,command:e.command,since:e.ts,duration_s:e.duration||0,active:true}; }\n    else if(e.type==='unban'){ for(const k in map){ if(map[k].ip===e.ip) map[k].active=false; } }\n  }\n  res.banned_ips=Object.values(map).filter(x=>x.active);\n  res.banned_count=res.banned_ips.length;\n}\nif(what==='validations'||what==='both'){\n  const ev=readLines('/home/node/.n8n/soar_validations.jsonl'); const byk={}; const order=[];\n  for(const e of ev){ const k=e.exec||('x'+(e.ip||'')+'|'+(e.ts||''));\n    if(e.type==='request'){ byk[k]={ip:e.ip,agent:e.agent,level:e.level,rule:e.rule,requested_at:e.ts,status:'pending'}; order.push(k); }\n    else if(e.type==='decision'){\n      if(byk[k]){ byk[k].status=e.result; byk[k].decided_at=e.ts; }\n      else { const c=Object.values(byk).filter(v=>v.ip===e.ip&&v.status==='pending'); if(c.length){ c[c.length-1].status=e.result; c[c.length-1].decided_at=e.ts; } }\n    }\n  }\n  let list=Object.values(byk).sort((x,y)=>String(y.requested_at||'').localeCompare(String(x.requested_at||''))).slice(0,25);\n  res.validations=list; res.validations_count=list.length;\n}\nreturn out(res);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "72a870bb-9ca5-49d1-9eff-dce6da14b993",
+      "name": "Status"
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

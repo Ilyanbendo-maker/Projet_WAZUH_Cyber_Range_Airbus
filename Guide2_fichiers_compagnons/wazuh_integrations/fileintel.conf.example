@@ -1,0 +1,5 @@
+{
+  "otx": "<VOTRE_CLE_ALIENVAULT_OTX>",
+  "ha":  "<VOTRE_CLE_HYBRID_ANALYSIS>",
+  "vt":  "<VOTRE_CLE_VIRUSTOTAL>"
+}

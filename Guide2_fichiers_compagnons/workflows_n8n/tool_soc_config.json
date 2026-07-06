@@ -1,0 +1,48 @@
+{
+  "name": "SOC tool - soc_config",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d5a8f291-d41e-4b8b-9ed3-69d075a41bef",
+      "name": "Input"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inp=$input.first().json||{};\nfunction dig(x){\n  if(x==null) return '';\n  if(typeof x==='string') return x;\n  if(typeof x==='object'){\n    if(x.action!==undefined) return x;\n    for(const k of ['some_input','query','input','text','value']) if(x[k]!==undefined) return dig(x[k]);\n    const vals=Object.values(x); if(vals.length) return dig(vals[0]);\n  }\n  return '';\n}\nlet dug=dig(inp), action='', name='';\nif(dug&&typeof dug==='object'&&dug.action!==undefined){ action=dug.action; name=dug.name||''; }\nelse {\n  let s=String(dug||'').trim();\n  if(s.startsWith('{')){ try{const o=JSON.parse(s); action=o.action||''; name=o.name||'';}catch(e){} }\n  if(!action){ const p=s.split(/\\s+/); action=(p[0]||''); name=p.slice(1).join(' '); }\n}\naction=String(action||'').trim().toLowerCase();\nif(action==='config'||action==='ossec.conf'||action==='conf') action='ossec';\nif(action==='list'||action==='liste') action='scripts';\nif(!['ossec','scripts','script'].includes(action)){ if(name===''&&action){ name=action; action='script'; } else action='scripts'; }\nname=String(name||'').replace(/[^A-Za-z0-9._-]/g,'').slice(0,64);\nconst fs=require('fs'); const base='/home/node/.n8n/socview'; let result='';\ntry{\n  if(action==='ossec') result=fs.readFileSync(base+'/ossec.conf','utf8');\n  else if(action==='scripts') result=\"Scripts d'action disponibles:\\n\"+fs.readdirSync(base+'/scripts').sort().join('\\n');\n  else { if(!name) result='Precise: action=script name=<nom>. Liste via action=scripts.';\n         else { try{ result=fs.readFileSync(base+'/scripts/'+name,'utf8'); }catch(e){ result='Script introuvable: '+name+'. Liste via action=scripts.'; } } }\n}catch(e){ result='[erreur] '+e.message; }\nif(result.length>14000) result=result.slice(0,14000)+'\\n...[tronque]';\nreturn [{json:{result: result||'(vide)'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "3e43a65d-93fc-4de6-b934-7ac7a576efe4",
+      "name": "Read"
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

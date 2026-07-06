@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+import sys, json, os, select, subprocess, shutil, ipaddress, datetime
+os.environ["PATH"] = "/usr/sbin:/usr/bin:/sbin:/bin:" + os.environ.get("PATH", "")
+
+def _read_ar():
+    """Lit le message AR Wazuh sans bloquer (execd garde le pipe ouvert: pas d'EOF)."""
+    buf = b""
+    while True:
+        r, _, _ = select.select([0], [], [], 3.0)
+        if not r:
+            break
+        c = os.read(0, 65536)
+        if not c:
+            break
+        buf += c
+        try:
+            return json.loads(buf.decode(errors="replace"))
+        except Exception:
+            pass
+    return json.loads(buf.decode(errors="replace"))
+
+data = _read_ar()
+command = data.get("command")
+extra = data.get("parameters", {}).get("extra_args", [])
+alert = data.get("parameters", {}).get("alert", {})
+
+srcip = alert.get("data", {}).get("srcip", "") or (extra[0] if extra else "")
+if srcip:
+    try:
+        net = str(ipaddress.IPv4Network(f"{srcip}/24", strict=False))
+        if command == "add":
+            subprocess.run(["iptables", "-I", "INPUT", "-s", net, "-j", "DROP"])
+            subprocess.run(["iptables", "-I", "FORWARD", "-s", net, "-j", "DROP"])
+        elif command == "delete":
+            subprocess.run(["iptables", "-D", "INPUT", "-s", net, "-j", "DROP"])
+            subprocess.run(["iptables", "-D", "FORWARD", "-s", net, "-j", "DROP"])
+    except ValueError:
+        pass

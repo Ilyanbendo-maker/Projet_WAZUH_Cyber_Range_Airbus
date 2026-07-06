@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Active-response : SUPPRESSION DEFINITIVE d'un fichier en quarantaine (rm fichier + .manifest).
+# Securise : basename seulement + realpath obligatoirement sous /var/ossec/quarantine/.
+import json, os, select, time
+QDIR="/var/ossec/quarantine"; LOG="/var/ossec/logs/active-responses.log"
+def log(m):
+    try:
+        with open(LOG,"a") as f: f.write("%s purge-quarantine: %s\n"%(time.strftime("%Y/%m/%d %H:%M:%S"),m))
+    except Exception: pass
+def _read_ar():
+    buf=b""
+    while True:
+        r,_,_=select.select([0],[],[],3.0)
+        if not r: break
+        c=os.read(0,65536)
+        if not c: break
+        buf+=c
+        try: return json.loads(buf.decode(errors="replace"))
+        except Exception: pass
+    try: return json.loads(buf.decode(errors="replace"))
+    except Exception: return {}
+d=_read_ar(); command=d.get("command"); p=d.get("parameters",{}) or {}
+extra=p.get("extra_args",[]) or []; alert=p.get("alert",{}) or {}
+target=(alert.get("syscheck",{}).get("path","") or (extra[0] if extra else "")).strip()
+if command=="add" and target:
+    name=os.path.basename(target); fp=os.path.join(QDIR,name); rp=os.path.realpath(fp)
+    if name and rp.startswith(QDIR+"/") and os.path.isfile(rp):
+        try:
+            os.remove(rp)
+            if os.path.isfile(rp+".manifest"): os.remove(rp+".manifest")
+            log("supprime "+name)
+        except Exception as e: log("ERREUR "+name+": "+str(e))
+    else:
+        log("cible invalide/introuvable: "+name)
