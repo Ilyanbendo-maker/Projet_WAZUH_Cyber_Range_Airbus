@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
- <b>Notre centre de sécurité.</b><br/>
+ <b>Notre centre de sécurité :</b><br/>
  Il surveille trois machines. Dès qu'une attaque est repérée, une IA l'analyse et l'envoie sur Discord, prête à traiter.
 </p>
 
@@ -11,9 +11,9 @@
 
 ## En une phrase
 
-Plutôt que d'éplucher des logs, on reçoit sur Discord une alerte déjà analysée et on choisit la réponse depuis le salon.
+Plutôt que de perdre du temps a rechercher les logs et prendre conscience des alertes, on reçoit sur Discord les alerte déjà analysée et on choisit la réponse à y donner depuis le salon.
 
-## Ce que fait CyberOps
+## Ce que fait notre infrastructure :
 
 | | |
 |--|--|
