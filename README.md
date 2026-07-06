@@ -21,9 +21,9 @@ Plutôt que de perdre du temps a rechercher les logs et prendre conscience des a
 | **Analyse par IA** | Une IA lit chaque alerte, la résume, note sa gravité et explique la méthode de l'attaquant. |
 | **Enrichissement** | L'adresse ou le fichier en cause est recoupé avec VirusTotal, AlienVault OTX, Hybrid Analysis et Shodan. |
 | **Alerte Discord** | Tout remonte sur un salon Discord sous forme de carte, en quelques secondes. |
-| **Validation** | Avant de bloquer quoi que ce soit, le SOC attend une réponse, Approuver ou Refuser. |
+| **Validation** | Avant de bloquer quoi que ce soit, l'IA attend une réponse, Approuver ou Refuser. |
 | **Réponse** | Bannir une adresse, isoler une machine ou mettre un fichier en quarantaine, avec un retour en arrière possible. |
-| **Chat** | On écrit une consigne en français sur Discord et le SOC l'exécute. |
+| **Chat** | On écrit une consigne en français sur Discord et l'IA l'exécute. |
 
 ## La démo, trois attaques
 
@@ -35,13 +35,13 @@ On dépose un fichier malveillant sur une des machines, avec un nom qui n'attire
 
 <p align="center"><img src="assets/demo_malware_card.png" width="100%"/></p>
 
-Le SOC le détecte et compare son empreinte à VirusTotal, Hybrid Analysis et AlienVault OTX. Les trois rapports sont accessibles depuis la carte.
+L'IA le détecte et compare son empreinte à VirusTotal, Hybrid Analysis et AlienVault OTX. Les trois rapports sont accessibles depuis la carte.
 
 <p align="center"><img src="assets/report_malware_vt.png" width="100%"/></p>
 
 Voici le rapport VirusTotal, 65 moteurs sur 67 détectent le fichier. Les liens Hybrid Analysis et OTX mènent aux deux autres analyses.
 
-On demande ensuite au SOC de s'en occuper, en français.
+On demande ensuite à l'IA depuis le salon dédié au chat de s'en occuper, en français.
 
 <p align="center"><img src="assets/demo_quarantine.png" width="100%"/></p>
 
@@ -59,7 +59,7 @@ L'alerte arrive sur Discord au bout de quelques secondes, l'analyse de l'IA déj
 
 <p align="center"><img src="assets/demo_validate.png" width="100%"/></p>
 
-Comme l'action va couper un accès, le SOC demande une confirmation avant d'agir.
+Comme l'action va couper un accès, l'IA demande une confirmation avant d'agir.
 
 <p align="center"><img src="assets/demo_response.png" width="100%"/></p>
 
@@ -69,17 +69,17 @@ Une fois la demande approuvée, l'adresse est bannie sur les trois machines.
 
 <p align="center"><img src="assets/demo_pubip_card.png" width="100%"/></p>
 
-Une connexion arrive depuis une adresse publique déjà répertoriée comme malveillante. Le SOC remonte les rapports VirusTotal, OTX et Shodan.
+Une connexion arrive depuis une adresse publique déjà répertoriée comme malveillante. L'IA remonte les rapports VirusTotal, OTX et Shodan.
 
 <p align="center"><img src="assets/report_pubip_vt.png" width="100%"/></p>
 
 Même principe pour une adresse. Sur VirusTotal, 13 moteurs la signalent et lui collent l'étiquette tor. OTX et Shodan s'ouvrent par les deux autres liens.
 
-On demande alors au SOC de l'isoler.
+On demande alors a l'IA depuis le salon dédié au chat de l'isoler.
 
 <p align="center"><img src="assets/demo_isolate.png" width="100%"/></p>
 
-« Isole la machine touchée. » Elle est coupée du reste du réseau, sauf du SOC, le temps de comprendre ce qui s'est passé.
+« Isole la machine touchée. » Elle est coupée du reste du réseau, sauf de la VM logeant WAZUH et N8N (c'est la même), le temps de comprendre ce qui s'est passé.
 
 ## Vue d'ensemble
 
@@ -87,11 +87,11 @@ On demande alors au SOC de l'isoler.
 
 ## La stack
 
-La détection repose sur Wazuh, épaulé par Suricata pour le trafic réseau. n8n fait tourner l'automatisation, DeepSeek fournit l'analyse, et tout se commande depuis Discord. Tailscale relie les trois machines entre elles.
+La détection repose sur Wazuh, auquel on à ajouté Suricata pour le trafic réseau. n8n fait tourner l'automatisation, DeepSeek fournit l'analyse, et tout se commande depuis Discord. Tailscale relie les trois machines entre elles et nous permet l'accès aux plateformes WAZUH, N8N et nous donne la possibilité de SSH tout ce qui se trouve dans le réseau interne de la Cyber Range depuis nos machines hôtes.
 
 ## L'équipe
 
-Ilyan · Thoma · Mathéo · EFREI Paris, matière SOC Overview.
+Ilyan Bendahmane· Thoma Boudhou· Mathéo Dreanic· EFREI Paris, matière SOC Overview.
 
 ## Documentation
 
