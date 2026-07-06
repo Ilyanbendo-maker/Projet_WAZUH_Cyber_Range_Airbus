@@ -4,7 +4,7 @@
 
 <p align="center">
  <b>CyberOps, notre centre de sécurité.</b><br/>
- Il surveille trois machines. Dès qu'une attaque est repérée, une IA l'analyse et l'envoie sur Discord, prête à traiter.
+ Il surveille trois machines. Dès qu'une attaque est repérée, une IA l'analyse et l'envoie sur Discord.
 </p>
 
 ---
