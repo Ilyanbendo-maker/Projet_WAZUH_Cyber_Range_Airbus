@@ -13,7 +13,7 @@
 
 Plutôt que de perdre du temps a filtrer les logs, on reçoit sur Discord une alerte déjà analysée et on choisit la réponse depuis le salon.
 
-## Ce que fait CyberOps
+## Ce que permet notre infrastructure
 
 | | |
 |--|--|
