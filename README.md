@@ -9,7 +9,7 @@
 
 ---
 
-## En une phrase
+## Rapidement
 
 Plutôt que de perdre du temps a rechercher les logs et prendre conscience des alertes, on reçoit sur Discord les alerte déjà analysée et on choisit la réponse à y donner depuis le salon.
 
