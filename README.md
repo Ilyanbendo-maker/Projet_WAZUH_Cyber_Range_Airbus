@@ -21,9 +21,9 @@ Plutôt que de perdre du temps a filtrer les logs, on reçoit sur Discord une al
 | **Analyse par IA** | Une IA lit chaque alerte, la résume, note sa gravité et explique la méthode de l'attaquant. |
 | **Enrichissement** | L'adresse ou le fichier en cause est recoupé avec VirusTotal, AlienVault OTX, Hybrid Analysis et Shodan. |
 | **Alerte Discord** | Tout remonte sur un salon Discord sous forme de carte, en quelques secondes. |
-| **Validation** | Avant de bloquer quoi que ce soit, le SOC attend une réponse, Approuver ou Refuser. |
+| **Validation** | Avant de bloquer quoi que ce soit, l'IA attend une réponse, Approuver ou Refuser. |
 | **Réponse** | Bannir une adresse, isoler une machine ou mettre un fichier en quarantaine, avec un retour en arrière possible. |
-| **Chat** | On écrit une consigne en français sur Discord et le SOC l'exécute. |
+| **Chat** | On écrit une consigne en français sur Discord et l'IA l'exécute. |
 
 ## La démo, trois attaques
 
