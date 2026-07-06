@@ -1,5 +1,5 @@
 <p align="center">
- <img src="assets/hero.png" alt="CyberOps" width="100%"/>
+ <img src="assets/hero.png" alt="Notre Infra WAZUH" width="100%"/>
 </p>
 
 <p align="center">
