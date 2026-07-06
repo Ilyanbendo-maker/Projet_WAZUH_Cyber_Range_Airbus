@@ -7,15 +7,6 @@
  Détection en temps réel, analyse par IA, et réponse validée en un clic depuis Discord.
 </p>
 
-<p align="center">
- <img src="assets/badge_siem_wazuh.png" height="22"/>
- <img src="assets/badge_ids_suricata.png" height="22"/>
- <img src="assets/badge_orchestration_n8n.png" height="22"/>
- <img src="assets/badge_ia_deepseek.png" height="22"/>
- <img src="assets/badge_cockpit_discord.png" height="22"/>
- <img src="assets/badge_reseau_tailscale.png" height="22"/>
-</p>
-
 ---
 
 ## En une phrase
