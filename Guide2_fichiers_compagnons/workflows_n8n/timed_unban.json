@@ -1,0 +1,139 @@
+{
+  "name": "SOC - timed unban",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "soc-timed-unban-0001",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "57123886-4db9-49ca-96fa-4fe64ec74d54",
+      "name": "Webhook",
+      "webhookId": "aaaa1111-bbbb-2222-cccc-333344445555"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = ($input.first().json || {}).body || $input.first().json || {};\nlet ip = String(b.ip||'').trim();\nlet agent = String(b.agent||'001').trim();\nlet delay = Number(b.delay||30);\nif(isNaN(delay)||delay<1) delay=1;\nif(delay>1209600) delay=1209600;            // cap 14 jours\nreturn [{json:{ip, agent, delay}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "a8b90dd0-6cdb-4770-9713-976ac680513e",
+      "name": "Validate"
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": "={{ $json.delay }}",
+        "unit": "seconds"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "76f49198-9ae6-4876-9fd3-9d4ad2215318",
+      "name": "Wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://172.17.0.1:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 9000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        0
+      ],
+      "id": "48905953-5e78-4785-a62d-5d6b421e0e32",
+      "name": "Token",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "a2d7a1a813a8efd7",
+          "name": "Wazuh API SOC"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const http=require('http');\nconst ip=$('Validate').first().json.ip;\nif(!ip) return [{json:{ok:false,msg:'ip manquante'}}];\nconst bp=JSON.stringify({token:'<TOKEN_PONT_A_CONFIGURER>',ip});\nconst bres=await new Promise((res)=>{const rr=http.request({host:'172.17.0.1',port:5601,path:'/unban',method:'POST',timeout:60000,headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(bp)}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>res(b));});rr.on('error',e=>res(JSON.stringify({ok:false,message:e.message})));rr.on('timeout',()=>{rr.destroy();res(JSON.stringify({ok:false,message:'timeout'}));});rr.write(bp);rr.end();});\nlet j={}; try{j=JSON.parse(bres);}catch(e){}\ntry{ require('fs').appendFileSync('/home/node/.n8n/soar_bans.jsonl', JSON.stringify({type:'unban',ip,agent:'000,001,002',ts:new Date().toISOString(),source:'auto'})+'\\n'); }catch(e){}\nreturn [{json:{ok:!!j.ok, ip, msg:j.message||bres}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "id": "be99c0d7-ad31-4993-b6c7-a1cf6e2e5b1b",
+      "name": "Unban"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token": {
+      "main": [
+        [
+          {
+            "node": "Unban",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

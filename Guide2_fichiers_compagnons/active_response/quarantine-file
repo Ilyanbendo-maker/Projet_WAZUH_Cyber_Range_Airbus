@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+import sys, json, os, select, subprocess, shutil, ipaddress, datetime
+os.environ["PATH"] = "/usr/sbin:/usr/bin:/sbin:/bin:" + os.environ.get("PATH", "")
+
+def _read_ar():
+    """Lit le message AR Wazuh sans bloquer (execd garde le pipe ouvert: pas d'EOF)."""
+    buf = b""
+    while True:
+        r, _, _ = select.select([0], [], [], 3.0)
+        if not r:
+            break
+        c = os.read(0, 65536)
+        if not c:
+            break
+        buf += c
+        try:
+            return json.loads(buf.decode(errors="replace"))
+        except Exception:
+            pass
+    return json.loads(buf.decode(errors="replace"))
+
+data = _read_ar()
+command = data.get("command")
+extra = data.get("parameters", {}).get("extra_args", [])
+alert = data.get("parameters", {}).get("alert", {})
+
+QDIR = "/var/ossec/quarantine"
+fp = alert.get("syscheck", {}).get("path", "") or (extra[0] if extra else "")
+if command == "add" and fp and os.path.exists(fp):
+    os.makedirs(QDIR, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest = f"{QDIR}/{ts}_{os.path.basename(fp)}"
+    with open(dest + ".manifest", "w") as f:
+        json.dump({"original_path": fp, "quarantined_at": ts}, f)
+    shutil.move(fp, dest)
+    os.chmod(dest, 0o400)
+elif command == "delete" and fp and os.path.exists(QDIR):
+    for f in os.listdir(QDIR):
+        if f.endswith(".manifest"):
+            mp = os.path.join(QDIR, f)
+            with open(mp) as mf:
+                info = json.load(mf)
+            if info.get("original_path") == fp:
+                q = mp[:-9]
+                if os.path.exists(q):
+                    shutil.move(q, fp)
+                    os.remove(mp)
+                break

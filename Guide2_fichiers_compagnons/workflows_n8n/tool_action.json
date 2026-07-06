@@ -1,0 +1,85 @@
+{
+  "name": "SOC tool - action",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "bbdd5267-5441-4e46-97a2-fd523bacfaf1",
+      "name": "Input"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://172.17.0.1:55000/security/user/authenticate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 9000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "74214042-22fa-4e26-a2b5-fdbee0919280",
+      "name": "Token",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "a2d7a1a813a8efd7",
+          "name": "Wazuh API SOC"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const https=require('https');\nconst http=require('http');\nconst fs=require('fs');\nconst out=(m)=>[{json:{output:m}}];\n\n// 1) parse args BLINDE : le toolWorkflow n'applique pas le schema -> les args de l'IA\n//    arrivent souvent en blob string (ex: query.some_input = \"command=ban, agent_id=001, ip=..., duration_seconds=60\").\nconst inp=$('Input').first().json||{};\nconst CMDS=['ban','unban','host-deny','route-null','block-subnet','kill-process','quarantine-file','restore-file','lockout-user','disable-account','isolate-host','restart-wazuh','memory-dump','purge-quarantine','delete-file','unisolate-host'];\nfunction collectStrings(x,acc){ if(x==null)return; if(typeof x==='string'){acc.push(x);return;} if(typeof x==='object'){for(const v of Object.values(x))collectStrings(v,acc);} }\nfunction parseKV(s){ const o={}; let n=0; for(const part of String(s).split(/[,;\\n]+/)){ const m=part.match(/^\\s*([a-zA-Z_]+)\\s*[=:]\\s*(.+?)\\s*$/); if(m){o[m[1].toLowerCase().trim()]=m[2].trim();n++;} } return n?o:null; }\nfunction findStructured(x){ if(x&&typeof x==='object'&&!Array.isArray(x)){ if(x.command!==undefined||x.action!==undefined||x.ip!==undefined||x.agent_id!==undefined||x.target!==undefined)return x; for(const v of Object.values(x)){const r=findStructured(v);if(r)return r;} } return null; }\nlet a=Object.assign({}, findStructured(inp)||{});\nconst strs=[]; collectStrings(inp,strs);\nfor(const s of strs){ const t=s.trim(); if(t.startsWith('{')){try{const j=JSON.parse(t);for(const k in j)if(a[k]===undefined)a[k]=j[k];}catch(e){}} const kv=parseKV(t); if(kv)for(const k in kv)if(a[k]===undefined)a[k]=kv[k]; }\nconst allstr=strs.join(' '); const blob=allstr.toLowerCase();\nlet command=String(a.command||a.action||'').toLowerCase().trim();\nif(!command){ for(const c of CMDS){ if(new RegExp('(^|[^a-z-])'+c.replace('-','\\\\-')+'([^a-z-]|$)').test(blob)){command=c;break;} } }\nlet ip=String(a.ip||a.srcip||a.target_ip||'').trim();\nif(!ip){ const m=allstr.match(/\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b/); if(m)ip=m[0]; }\nlet target=String(a.target||a.user||a.file||a.process||a.value||'').trim();\nlet agent=String(a.agent_id||a.agent||'').trim();\nif(!['000','001','002'].includes(agent)){ const m=allstr.match(/\\b(00[012])\\b/); if(m)agent=m[1]; else if(/\\bwin/i.test(blob))agent='002'; else if(/ubuntu.?2|agent_ubuntu2/i.test(blob))agent='001'; }\nif(agent==='1')agent='001'; if(agent==='2')agent='002';\nlet duration; if(a.duration_seconds!==undefined)duration=Number(a.duration_seconds); else if(a.duration!==undefined)duration=Number(a.duration); else if(/permanent|definiti|indefini|pour toujours|sans limite/i.test(blob))duration=0; else { let m=blob.match(/(\\d+)\\s*(secondes?|sec|minutes?|min|heures?|jours?|[smhj])\\b/i); if(m){const u=m[2].toLowerCase()[0];duration=Number(m[1])*(u==='h'?3600:u==='j'?86400:u==='m'?60:1);} else { m=blob.match(/dur\\w*\\D{0,6}(\\d+)/); if(m)duration=Number(m[1]); } }\nif(duration!==undefined&&isNaN(duration))duration=undefined;\n\n// 2) whitelist\nconst MAP={ban:'firewall-drop',unban:'unban','host-deny':'host-deny','route-null':'route-null','block-subnet':'block-subnet','kill-process':'kill-process','quarantine-file':'quarantine-file','restore-file':'restore-file','lockout-user':'lockout-user','disable-account':'disable-account','isolate-host':'isolate-host','restart-wazuh':'restart-wazuh','memory-dump':'memory-dump','purge-quarantine':'purge-quarantine','delete-file':'delete-file','unisolate-host':'unisolate-host'};\nif(!MAP[command])return out(`REFUS: commande inconnue '${command}'. Autorisees: ${Object.keys(MAP).join(', ')}.`);\nconst exec=MAP[command];\nif(command==='isolate-host'||command==='unisolate-host'){ if(agent==='000')return out(`REFUS: le manager (000) ne peut JAMAIS etre isole.`); if(agent!=='001'&&agent!=='002')return out(`Isolement/desisolement: cible 001 (Agent_ubuntu2, linux) ou 002 (Agent_windows). Precise agent_id.`); if(agent==='002'){ const ep=command==='isolate-host'?'/isolate':'/unisolate'; const bp=JSON.stringify({token:'<TOKEN_PONT_A_CONFIGURER>',agent:'002'}); const bres=await new Promise((res)=>{const rr=http.request({host:'172.17.0.1',port:5601,path:ep,method:'POST',timeout:110000,headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(bp)}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>res(b));});rr.on('error',e=>res(JSON.stringify({ok:false,message:e.message})));rr.on('timeout',()=>{rr.destroy();res(JSON.stringify({ok:false,message:'timeout'}));});rr.write(bp);rr.end();}); let j={}; try{j=JSON.parse(bres);}catch(e){} return out(j.message||(j.ok?`${command} 002 ok`:`echec ${command} sur win11 (002)`)); } }\n\n// 3) agent requis\nif(!['001','002'].includes(agent)&&!(['purge-quarantine','delete-file'].includes(command)&&agent==='000')&&!['ban','unban'].includes(command))return out(`Precise l'agent cible: 001 (Agent_ubuntu2, linux), 002 (Agent_windows), ou 000 (manager) pour purge-quarantine. Recu: '${agent||'(vide)'}'.`);\n\nif(command==='delete-file'){\n  if(!target)return out(`Precise le chemin EXACT du fichier a supprimer (target).`);\n  const dp=JSON.stringify({token:'<TOKEN_PONT_A_CONFIGURER>',agent,path:target});\n  const dres=await new Promise((res)=>{const rr=http.request({host:'172.17.0.1',port:5601,path:'/delete',method:'POST',timeout:35000,headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(dp)}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>res(b));});rr.on('error',e=>res(JSON.stringify({ok:false,message:e.message})));rr.on('timeout',()=>{rr.destroy();res(JSON.stringify({ok:false,message:'timeout'}));});rr.write(dp);rr.end();});\n  let j={}; try{j=JSON.parse(dres);}catch(e){}\n  try{ fs.appendFileSync('/home/node/.n8n/soar_quarantine.jsonl', JSON.stringify({type:'delete-file',agent,path:target,ok:!!j.ok,ts:new Date().toISOString(),source:'chat'})+'\\n'); }catch(e){}\n  return out(j.ok?`OK: fichier supprime sur agent ${agent} : ${target}`:`Echec suppression (${target}): ${j.message||dres}`);\n}\n// 4) garde-fou denylist (deterministe, hors LLM)\nconst ALWAYS=['100.73.179.63','100.67.35.26'];        // manager + PC hote : jamais (meme break-glass)\nconst TS=['100.101.128.76','100.101.80.37'];           // ubuntu-2, win11 : relachables via break-glass\nconst ipValid=(x)=>/^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$/.test(x)&&x.split('.').every(o=>+o>=0&&+o<=255);\nconst inLAN=(x)=>x.startsWith('192.168.0.');\nlet bg=false;\ntry{const t=parseInt(String(fs.readFileSync('/home/node/.n8n/soar_breakglass','utf8')).trim(),10);if(t>Math.floor(Date.now()/1000))bg=true;}catch(e){}\nconst IPCMDS=['ban','host-deny','route-null','block-subnet'];\nif(IPCMDS.includes(command)){\n  if(!ip)return out(`Precise l'IP cible pour '${command}'.`);\n  if(!ipValid(ip))return out(`REFUS garde-fou: IP invalide '${ip}'.`);\n  const blocked=ALWAYS.includes(ip)||(!bg&&(inLAN(ip)||TS.includes(ip)));\n  if(blocked)return out(`REFUS garde-fou: ${ip} protegee${ALWAYS.includes(ip)?' (critique, jamais bannissable)':''}. Action annulee.`);\n}\n// (garde-fou isolate deplace plus haut: manager jamais, 001 uniquement; break-glass retire)\nif(command==='ban'||command==='unban'){\n  if(!ip)return out(`Precise l'IP a ${command==='ban'?'bannir':'debannir'}.`);\n  if(command==='ban'&&duration===undefined)return out(\"Precise la duree du ban (ex: '30 min', '2h', ou 'permanent'). Je ne mets aucune duree par defaut.\");\n  const ep=command==='ban'?'/ban':'/unban';\n  const bp=JSON.stringify({token:'<TOKEN_PONT_A_CONFIGURER>',ip});\n  const bres=await new Promise((res)=>{const rr=http.request({host:'172.17.0.1',port:5601,path:ep,method:'POST',timeout:60000,headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(bp)}},x=>{let b='';x.on('data',c=>b+=c);x.on('end',()=>res(b));});rr.on('error',e=>res(JSON.stringify({ok:false,message:e.message})));rr.on('timeout',()=>{rr.destroy();res(JSON.stringify({ok:false,message:'timeout'}));});rr.write(bp);rr.end();});\n  let j={}; try{j=JSON.parse(bres);}catch(e){}\n  if(!j.ok)return out(`Echec ${command} ${ip} sur les 3 agents: ${j.message||bres}`);\n  let extra='';\n  if(command==='ban'&&duration>0){\n    const tp=JSON.stringify({ip,delay:duration});\n    try{await new Promise((res)=>{const rr=http.request({host:'127.0.0.1',port:5678,path:'/webhook/soc-timed-unban-0001',method:'POST',timeout:5000,headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(tp)}},x=>{x.on('data',()=>{});x.on('end',()=>res());});rr.on('error',()=>res());rr.on('timeout',()=>{rr.destroy();res();});rr.write(tp);rr.end();});extra=` Auto-deban dans ${duration}s.`;}catch(e){extra=' (auto-deban non programme).';}\n  } else if(command==='ban'){ extra=' Ban PERMANENT (jusqu a unban manuel).'; }\n  try{ fs.appendFileSync('/home/node/.n8n/soar_bans.jsonl', JSON.stringify({type:command,ip,agent:'000,001,002',command,ts:new Date().toISOString(),duration:(command==='ban'?duration:0),source:'chat'})+'\\n'); }catch(e){}\n  return out(`OK: ${command} ${ip} sur les 3 agents (000 ubuntu, 001 ubuntu_2, 002 win11).${extra}`);\n}\n\n// 5) corps AR\nconst body={command:'!'+exec,arguments:[],alert:{data:{}}};\nif(IPCMDS.includes(command)||command==='unban'){body.alert.data.srcip=ip;if(command==='unban'||command==='block-subnet')body.arguments=[ip];}\nif(command==='kill-process'){if(!target)return out(`Precise le process (nom ou PID).`);body.arguments=[target];}\nif(command==='quarantine-file'||command==='restore-file'){if(!target)return out(`Precise le chemin du fichier.`);body.arguments=[target];body.alert.syscheck={path:target};}\nif(command==='purge-quarantine'){if(!target)return out(`Precise le fichier en quarantaine (qfile, via list_quarantine).`);body.arguments=[target];body.alert.syscheck={path:target};}\nif(command==='lockout-user'){if(!target)return out(`Precise l'utilisateur.`);body.arguments=[target];body.alert.data.dstuser=target;}\nif(command==='disable-account'){if(!target)return out(`Precise l'utilisateur.`);body.alert.data.dstuser=target;body.arguments=[target];}\n\n// 6) token\nconst token=(($('Token').first().json||{}).data||{}).token;\nif(!token)return out(`Erreur: token Wazuh introuvable (auth echouee).`);\n\n// 7) PUT active-response\nfunction mkreq(mod){return (opt,p)=>new Promise((res,rej)=>{const r=mod.request(opt,x=>{let d='';x.on('data',c=>d+=c);x.on('end',()=>res({code:x.statusCode,body:d}));});r.on('error',rej);r.on('timeout',()=>{r.destroy();rej(new Error('timeout'));});if(p)r.write(p);r.end();});}\nconst rq=mkreq(https);       // Wazuh API = HTTPS\nconst rqh=mkreq(http);       // webhook n8n local = HTTP\nconst pl=JSON.stringify(body); let r;\ntry{r=await rq({host:'172.17.0.1',port:55000,path:'/active-response?agents_list='+agent,method:'PUT',rejectUnauthorized:false,timeout:9000,headers:{'Authorization':'Bearer '+token,'Content-Type':'application/json','Content-Length':Buffer.byteLength(pl)}},pl);}\ncatch(e){return out(`Erreur envoi AR: ${e.message}`);}\nlet okSent=false;try{const j=JSON.parse(r.body);okSent=(j.error===0&&j.data&&j.data.total_affected_items>0);}catch(e){}\nif(r.code!==200||!okSent)return out(`Echec AR (http ${r.code}): ${String(r.body).slice(0,180)}`);\n\n// 8) ban temporise -> fire-and-forget timed-unban\nlet extra='';\nif(command==='ban'&&duration>0){\n  const tp=JSON.stringify({ip,agent,delay:duration});\n  try{await rqh({host:'127.0.0.1',port:5678,path:'/webhook/soc-timed-unban-0001',method:'POST',timeout:5000,headers:{'Content-Type':'application/json','Content-Length':Buffer.byteLength(tp)}},tp);extra=` Auto-deban programme dans ${duration}s.`;}\n  catch(e){extra=` (ATTENTION auto-deban non programme: ${e.message} -- pense a unban manuel).`;}\n}\nif(command==='ban'&&duration===0)extra=' Ban PERMANENT (jusqu a unban manuel).';\n// ---- registre des bans (JSONL append-only) ----\ntry{\n  const LED='/home/node/.n8n/soar_bans.jsonl'; const now=new Date().toISOString();\n  if(['ban','host-deny','route-null','block-subnet'].includes(command)){\n    fs.appendFileSync(LED, JSON.stringify({type:'ban',ip,agent,command,ts:now,duration:(command==='ban'?duration:0),source:'chat'})+'\\n');\n  } else if(command==='unban'){\n    fs.appendFileSync(LED, JSON.stringify({type:'unban',ip,agent,ts:now,source:'chat'})+'\\n');\n  }\n}catch(e){}\nconst tgt=ip||target||'';\nreturn out(`OK: ${command}${tgt?(' ('+tgt+')'):''} execute sur agent ${agent}.${extra}`);"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "0f2a426b-f042-485c-bc5a-70559e4f6fe7",
+      "name": "Act"
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token": {
+      "main": [
+        [
+          {
+            "node": "Act",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

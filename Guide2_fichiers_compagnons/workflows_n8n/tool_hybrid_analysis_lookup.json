@@ -1,0 +1,127 @@
+{
+  "name": "SOC tool - hybrid_analysis_lookup",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f5524412-8937-4882-ab0d-3f28986a0f99",
+      "name": "Input"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inp=$input.first().json||{};\nconst strs=[]; (function col(x){if(x==null)return;if(typeof x==='string'){strs.push(x);return;}if(typeof x==='object')for(const v of Object.values(x))col(v);})(inp);\nfunction fs(x){if(x&&typeof x==='object'&&!Array.isArray(x)){if(x.sha256!==undefined||x.hash!==undefined||x.indicator!==undefined||x.file!==undefined)return x;for(const v of Object.values(x)){const r=fs(v);if(r)return r;}}return null;}\nconst a=fs(inp)||{}; let h=String(a.sha256||a.hash||a.indicator||a.file||'').trim(); const all=strs.join(' ');\nif(!/^[a-fA-F0-9]{64}$/.test(h)){const m=all.match(/\\b[a-fA-F0-9]{64}\\b/);if(m)h=m[0];}\nreturn [{json:{hash:h}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "7fd9747e-6123-46f1-a3dc-5a141e42d71b",
+      "name": "Parse"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://hybrid-analysis.com/api/v2/overview/{{ $json.hash }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Falcon Sandbox"
+            },
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        0
+      ],
+      "id": "3de74ad4-b853-4b0f-895f-70c6b8a7b160",
+      "name": "HybridAnalysis",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hybridanalysis01",
+          "name": "Hybrid Analysis SOC"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{}; const code=(r.statusCode!==undefined)?r.statusCode:200; const body=(r.body!==undefined)?r.body:r;\nconst h=($('Parse').first().json||{}).hash||'';\nif(!/^[a-fA-F0-9]{64}$/.test(h))return [{json:{hash:h,error:\"Hybrid Analysis exige un SHA256 (64 hex). Fournis le sha256 du fichier.\"}}];\nif(code===404)return [{json:{hash:h,found:false,msg:\"Hybrid Analysis: aucun rapport pour ce hash\"}}];\nif(code===401||code===403)return [{json:{hash:h,error:\"Hybrid Analysis: \"+code+\" (cle/permission)\"}}];\nif(code>=400)return [{json:{hash:h,error:\"Hybrid Analysis HTTP \"+code}}];\nlet b=body; if(typeof b==='string'){try{b=JSON.parse(b);}catch(e){return [{json:{hash:h,error:\"reponse non JSON\"}}];}}\nif(!b||(Array.isArray(b)&&!b.length))return [{json:{hash:h,found:false,msg:\"Hybrid Analysis: aucun rapport\"}}];\nreturn [{json:{hash:h, verdict:b.verdict||null, threat_score:(b.threat_score!==undefined?b.threat_score:null), vx_family:b.vx_family||null, type:(Array.isArray(b.type_short)?b.type_short.join(','):(b.type||null)), whitelisted:(b.whitelisted||false), dernier_nom:b.last_file_name||null, tags:(b.tags||[]).slice(0,8)}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "a39d8556-a545-455d-a1f4-77f4b360075b",
+      "name": "Compact"
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse": {
+      "main": [
+        [
+          {
+            "node": "HybridAnalysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HybridAnalysis": {
+      "main": [
+        [
+          {
+            "node": "Compact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

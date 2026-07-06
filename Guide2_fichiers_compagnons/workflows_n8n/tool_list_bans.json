@@ -1,0 +1,48 @@
+{
+  "name": "SOC tool - list_bans",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f3c8a597-6f94-43c1-a458-42814f558f58",
+      "name": "Input"
+    },
+    {
+      "parameters": {
+        "jsCode": "function dig(x){ if(x==null)return''; if(typeof x==='string')return x; if(typeof x==='object'){ if(x.agent!==undefined)return String(x.agent); for(const k of ['some_input','query','input','text','value']) if(x[k]!==undefined) return dig(x[k]); const v=Object.values(x); if(v.length) return dig(v[0]); } return ''; }\nfunction whichAgent(a){ a=String(a||'').toLowerCase(); if(/\\b002\\b|win/.test(a))return'002'; if(/\\b001\\b|ubuntu.?2|ubuntu2/.test(a))return'001'; if(/\\b000\\b|manager|\\bubuntu\\b/.test(a))return'000'; return ''; }\n\nconst ag=whichAgent(dig($input.first().json||{}));\nconst fs=require('fs'); let data;\ntry{ data=JSON.parse(fs.readFileSync('/home/node/.n8n/socview/bans.json','utf8')); }\ncatch(e){ return [{json:{result:'[collecte bans indisponible: '+e.message+']'}}]; }\nconst ags=data.agents||{};\nfunction fmt(id){ const x=ags[id]||{}; const b=x.banned_ips||[]; if(!b.length) return id+' ('+(x.name||'')+'): aucune IP bannie  ['+(x.source||'')+']'; return id+' ('+(x.name||'')+'): '+b.map(z=>z.ip).join(', ')+'  ['+(x.source||'')+']'; }\nconst ids=ag?[ag]:['000','001','002'];\nreturn [{json:{result:'IP actuellement bannies (etat reel du pare-feu, collecte '+(data.generated_at||'?')+'):\\n'+ids.map(fmt).join('\\n')+'\\n(soar_status = journal SOAR ; ceci = etat live du pare-feu)'}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "74472b84-c12b-4d46-b442-605fa1e86e48",
+      "name": "Read"
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

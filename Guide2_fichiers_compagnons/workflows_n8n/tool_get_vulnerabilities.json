@@ -1,0 +1,112 @@
+{
+  "name": "SOC tool - get_vulnerabilities",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8989c524-1e77-435e-a64e-13a5dc9c5f38",
+      "name": "Input"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inp=$input.first().json||{};\nfunction fromStr(s){s=String(s).trim();if(s.startsWith('{')){try{return JSON.parse(s);}catch(e){}}return {};}\nlet raw=(inp.query!==undefined)?inp.query:inp; let a={};\nif(typeof raw==='string'){a=fromStr(raw);}\nelse if(raw&&typeof raw==='object'){\n  if(raw.agent_id!==undefined||raw.severity!==undefined||raw.cve!==undefined||raw.size!==undefined){a=raw;}\n  else{const f=Object.values(raw)[0]; a=(typeof f==='string')?fromStr(f):(f&&typeof f==='object'?f:raw);}\n}\nlet agent=String(a.agent_id||a.agent||'').trim();\nif(agent==='1'||/ubuntu.?2|agent_ubuntu2/i.test(agent))agent='001';\nif(agent==='2'||/win/i.test(agent))agent='002';\nlet severity=String(a.severity||'').trim();        // Critical|High|Medium|Low\nif(severity)severity=severity.charAt(0).toUpperCase()+severity.slice(1).toLowerCase();\nlet cve=String(a.cve||a.id||'').trim().toUpperCase();\nlet size=Number(a.size)||20;\nconst filt=[];\nif(agent)filt.push({term:{'agent.id':agent}});\nif(severity)filt.push({term:{'vulnerability.severity':severity}});\nif(cve)filt.push({term:{'vulnerability.id':cve}});\nconst query=filt.length?{bool:{filter:filt}}:{match_all:{}};\nreturn [{json:{size,query}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "3b1851b4-01e7-43bd-afda-8aa52ab7d526",
+      "name": "Parse"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://172.17.0.1:9200/wazuh-states-vulnerabilities-*/_search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ size: $json.size, sort: [{ 'vulnerability.score.base': { order: 'desc' } }], _source: ['agent.name','agent.id','package.name','package.version','vulnerability.id','vulnerability.severity','vulnerability.score.base','vulnerability.description'], query: $json.query }) }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        0
+      ],
+      "id": "448c8775-e7bf-429a-bdc2-c5ffbda46153",
+      "name": "Search",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "4c6a75f7126cc151",
+          "name": "Wazuh Indexer SOC"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r=$input.first().json||{};\nconst hits=(r.hits&&r.hits.hits)||[];\nconst items=hits.map(h=>{const s=h._source||{};const v=s.vulnerability||{};const p=s.package||{};const ag=s.agent||{};\n  return {cve:v.id, severity:v.severity, score:(v.score&&v.score.base), package:p.name, version:p.version, agent:ag.name,\n          desc:(v.description||'').slice(0,160)};});\nconst total=(r.hits&&r.hits.total&&(r.hits.total.value??r.hits.total))||0;\nreturn [{json:{count:hits.length, total_matching:total, vulnerabilities:items}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ],
+      "id": "44245af0-c36e-4fe2-85d0-3a93fda8359c",
+      "name": "Compact"
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {
+            "node": "Parse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse": {
+      "main": [
+        [
+          {
+            "node": "Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search": {
+      "main": [
+        [
+          {
+            "node": "Compact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}

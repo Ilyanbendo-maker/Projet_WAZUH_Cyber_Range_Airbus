@@ -1,0 +1,9 @@
+[Unit]
+Description=Bridge docker0 -> Wazuh Indexer (n8n SOC access)
+After=network.target wazuh-indexer.service
+[Service]
+ExecStart=/usr/bin/socat TCP-LISTEN:9200,bind=172.17.0.1,fork,reuseaddr TCP4:127.0.0.1:9200
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target

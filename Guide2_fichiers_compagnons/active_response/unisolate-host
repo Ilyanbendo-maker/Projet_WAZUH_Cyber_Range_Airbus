@@ -1,0 +1,62 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+# Active-response UNISOLATE-HOST : action INVERSE de isolate-host. Restaure iptables + ip6tables depuis
+# le backup pre-isolement. Recovery : fail-OPEN vers la restauration, idempotent (no-op si non isole),
+# verrou partage, JAMAIS de flush-ACCEPT aveugle. (Tailscale se reconnecte seul : on n'y touche pas.)
+import json, os, sys, select, subprocess, fcntl, time
+
+os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:" + os.environ.get("PATH", "")
+B4 = "/var/ossec/tmp/iptables_pre_isolation.backup"
+B6 = "/var/ossec/tmp/ip6tables_pre_isolation.backup"
+FLAG = "/var/ossec/tmp/isolation.active"
+LOCK = "/var/ossec/tmp/isolation.lock"
+LOG = "/var/ossec/logs/active-responses.log"
+
+def log(m):
+    try:
+        with open(LOG, "a") as f:
+            f.write("%s unisolate-host: %s\n" % (time.strftime("%Y/%m/%d %H:%M:%S"), m))
+    except Exception:
+        pass
+
+def run(cmd, **k):
+    try:
+        return subprocess.run(cmd, **k)
+    except Exception as e:
+        log("ERR %s: %s" % (" ".join(cmd[:2]), e))
+        return None
+
+def _drain_stdin():
+    try:
+        r, _, _ = select.select([0], [], [], 3.0)
+        if r:
+            os.read(0, 65536)
+    except Exception:
+        pass
+
+def main():
+    os.makedirs("/var/ossec/tmp", exist_ok=True)
+    lk = open(LOCK, "w")
+    fcntl.flock(lk, fcntl.LOCK_EX)
+    _drain_stdin()
+    if not os.path.exists(FLAG) and not os.path.exists(B4):
+        log("hote non isole -> rien a restaurer (no-op, on n'ouvre JAMAIS a l'aveugle)")
+        return
+    ok = True
+    if os.path.exists(B4):
+        with open(B4) as f:
+            r = run(["iptables-restore", "-w", "5"], stdin=f)
+        ok = ok and r is not None and r.returncode == 0
+    if os.path.exists(B6):
+        with open(B6) as f:
+            r = run(["ip6tables-restore", "-w", "5"], stdin=f)
+        ok = ok and r is not None and r.returncode == 0
+    if ok:
+        for p in (B4, B6, FLAG):
+            try: os.remove(p)
+            except Exception: pass
+        log("desisole OK (LAN+Internet restaures ; tailscale se reconnecte seul)")
+    else:
+        log("echec iptables-restore -> backup CONSERVE pour re-essai (canal Wazuh tjrs ouvert ; reboot = filet)")
+
+main()

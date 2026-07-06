@@ -1,0 +1,15 @@
+[Unit]
+Description=SOAR Discord validation bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=lade
+WorkingDirectory=/home/lade/soar-bot
+EnvironmentFile=/home/lade/soar-bot/config.env
+ExecStart=/home/lade/soar-bot/venv/bin/python /home/lade/soar-bot/soar_bot.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
