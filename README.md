@@ -25,7 +25,7 @@ Plutôt que de perdre du temps a rechercher les logs et prendre conscience des a
 | **Réponse** | Bannir une adresse, isoler une machine ou mettre un fichier en quarantaine, avec un retour en arrière possible. |
 | **Chat** | On écrit une consigne en français sur Discord et l'IA l'exécute. |
 
-## La démo, trois attaques
+## Démonstration avec 3 attaques
 
 ### Attaque 1 : un fichier piégé
 
